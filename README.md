@@ -4,7 +4,7 @@ PracticalMachineLearningProject
 This is a repository containing project assignment from Coursera course  Practical Machine Learning.
 
 
-You should view the main_file.html fro grading. 
+You should view the main_file.html for grading. 
 
 And main_file.Rmd is the R markdown file producing the html.
 
