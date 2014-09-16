@@ -1,0 +1,198 @@
+---
+title: "Activity Recognition of Weight Lifting Exercise"
+author: "Aden Guo"
+date: "Monday, September 15, 2014"
+output: html_document
+---
+
+
+## Brief Introduction
+
+This project focused on predicting the types of weight lifting exercise. The training data and test data are from the paper "Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013." A voting predictor was built to predict the type of human activities. The voting predictor consists several predictors including random forest, tree model, neural network and so on. Through choosing correct parameter of voting, the accuracy of this predicting system is above 99% on validation set. 
+
+## Preparing R and Data Cleaning
+
+
+Load the datesets and R package "caret" which was frequently used in the class.
+
+```{r results ='hide', warning =FALSE}
+library(caret)
+
+data <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+summary(data)
+```
+
+
+By looking into the summary of the data, the first six variables shoud not be used as predictors. And many variables have too many NAs or blanks in it (more than 90%). These variables should also be omitted. These variables of testing data set are also removed.
+```{r cache =TRUE}
+data <- data[,c(-1,-2,-3,-4,-5,-6)]
+testing <- testing[,c(-1,-2,-3,-4,-5,-6)]
+remove_list <- c()
+for (col_num in 1:dim(data)[2]){
+  if (sum(data[,col_num] == "") > 0.9*dim(data)[1] || sum(is.na(data[,col_num])) > 0.9*dim(data)[1])
+  remove_list <- c(remove_list, -col_num)
+}
+
+data <- data[, remove_list]
+testing <- testing[, remove_list]
+```
+
+The data was split into two sata set. One is training set used to training all the models and the other is validation set used to determine the best voting parameter of the final model.
+
+```{r cache =TRUE}
+in_train <- createDataPartition(y = data$classe, p = 0.8, list = FALSE)
+training <- data[in_train,]
+validation <- data[-in_train,]
+```
+
+## Training of Models
+
+In order to reduce overfitting, the repeat cross-validation method was used. Repeated time has been set to 5. Basically all the models in this project have been trained under such method.  
+
+```{r cache =TRUE}
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+
+```
+
+Basically for every type of algorithm, two kinds of models were built, with PCA and without PCA preprocess. Seven algorithms have been trained. They are Classification And Regression Trees(CART), Bagged CART, Random Forest, Boosted Logistic Regression, Stochastic Gradient Boosting, Model Averaged Neural Network and Neural Networks with Feature Extraction. The first six are trained with and without PCA. The last one( Neural Networks with Feature Extraction) is trained without PCA. Since the last one have build-in PCA process. So there are total 13 models.
+
+```{r results ='hide', cache =TRUE, warning =FALSE, message = FALSE}
+model_rpart_pca <- train(classe ~ .,method = "rpart", preProcess = "pca", data =  training, trControl = ctrl)
+model_rpart <- train(classe ~ .,method = "rpart", data =  training, trControl = ctrl)
+gc()
+model_treebag <- train(classe ~ .,method = "treebag", data =  training, trControl = ctrl)
+model_treebag_pca <- train(classe ~ .,method = "treebag", preProcess = "pca", data =  training, trControl = ctrl)
+gc()
+model_randomforest <- train(classe ~ .,method = "rf", data =  training, trControl = ctrl)
+model_randomforest_pca <- train(classe ~ .,method = "rf", preProcess = "pca", data =  training, trControl = ctrl)
+gc()
+model_LogitBoost <- train(classe ~ .,method = "LogitBoost", data =  training, trControl = ctrl)
+model_LogitBoost_pca <- train(classe ~ .,method = "LogitBoost", preProcess = "pca", data =  training, trControl = ctrl)
+gc()
+model_pcaNNet <- train(classe ~ .,method = "pcaNNet", data =  training)
+gc()
+model_gbm <- train(classe ~ .,method = "gbm", data =  training, trControl = ctrl)
+model_gbm_pca <- train(classe ~ .,method = "gbm", preProcess = "pca", data =  training, trControl = ctrl)
+gc()
+model_avNNet <- train(classe ~ .,method = "avNNet", data =  training, trControl = ctrl)
+model_avNNet_pca <- train(classe ~ .,method = "avNNet", preProcess = "pca", data =  training, trControl = ctrl)
+gc()
+
+```
+
+Here the accuracy of each model on validation set are calculated as below. As we can see, the random forest without PCA achieves highest accuracy. 
+
+
+```{r echo = FALSE, cache =TRUE, warning =FALSE, message = FALSE}
+predictor_names = c( "CART", "Bagged CART", "Random Forest", "Boosted Logistic Regression", 
+                    "Stochastic Gradient Boosting", "Model Averaged Neural Network", 
+                    "Neural Networks with Feature Extraction")
+accuracy_with_pca = c()
+accuracy_without_pca = c()
+
+
+accuracy_with_pca[1] <- confusionMatrix(validation$classe, predict(model_rpart_pca, newdata = validation))$overall[[1]]
+accuracy_without_pca[1] <- confusionMatrix(validation$classe, predict(model_rpart, newdata = validation))$overall[[1]]
+
+
+accuracy_without_pca[2] <- confusionMatrix(validation$classe, predict(model_treebag, newdata = validation))$overall[[1]]
+accuracy_with_pca[2] <- confusionMatrix(validation$classe, predict(model_treebag_pca, newdata = validation))$overall[[1]]
+
+accuracy_without_pca[3] <- confusionMatrix(validation$classe, predict(model_randomforest, newdata = validation))$overall[[1]]
+accuracy_with_pca[3] <- confusionMatrix(validation$classe, predict(model_randomforest_pca, newdata = validation))$overall[[1]]
+
+accuracy_without_pca[4] <- confusionMatrix(validation$classe, predict(model_LogitBoost, newdata = validation))$overall[[1]]
+accuracy_with_pca[4] <- confusionMatrix(validation$classe, predict(model_LogitBoost_pca, newdata = validation))$overall[[1]]
+
+accuracy_without_pca[5] <- confusionMatrix(validation$classe, predict(model_gbm, newdata = validation))$overall[[1]]
+accuracy_with_pca[5] <- confusionMatrix(validation$classe, predict(model_gbm_pca, newdata = validation))$overall[[1]]
+
+accuracy_without_pca[6] <- confusionMatrix(validation$classe, predict(model_avNNet, newdata = validation))$overall[[1]]
+accuracy_with_pca[6] <- confusionMatrix(validation$classe, predict(model_avNNet_pca, newdata = validation))$overall[[1]]
+
+accuracy_with_pca[7] <- confusionMatrix(validation$classe, predict(model_pcaNNet, newdata = validation))$overall[[1]]
+accuracy_without_pca[7] <- NA 
+
+accuracy_table <- data.frame(Accuracy_PCA = accuracy_with_pca, Accuracy_NoPCA = accuracy_without_pca, row.names = predictor_names)
+
+accuracy_table
+```
+
+
+## Voting Predictor
+
+A voting predictor consisting of above 13 models is constructed. Two voting principles are carried out by this predictor. First, majority wins. If many models predict the same type of activity. The voting result is that activity. Second, the number of models which are agree on same type of activity should no less than some portion total number of models. Otherwise, the leader of the models makes decision. For example, higher than 30% of models predict the same result. Than the final result is voting by models. However, if no result was choosed by more than 30% of models. The final result is calculated by the leader of models. In this artical, the level of agreement which is refered as voting parameter ("30%" in above example) is determined by validation dataset. And leader of model is the model with highest accuracy which is model of random forest.
+
+```{r cache =TRUE}
+models_list <- list(model_randomforest, model_randomforest_pca, model_rpart_pca, model_rpart, model_treebag, model_treebag_pca,model_LogitBoost, model_LogitBoost_pca, model_gbm, model_gbm_pca, model_avNNet, model_avNNet_pca,model_pcaNNet)
+
+
+voting_predictor <- function(models_list, newdata, uncertainty_level){
+  result_matrix <- sapply(models_list, function(predictor) predict(predictor, newdata = newdata))
+  result <- apply(result_matrix, 1 ,function(vector) names(which.max(table(vector)))[1])
+  voting_length <- apply(result_matrix, 1 ,function(vector) max(table(vector)))
+  voting_number <- length(models_list)
+  
+  uncertain_index <- which(voting_length <= uncertainty_level * voting_number)
+  authority_prediction <- predict(models_list[[1]], newdata = newdata)
+  for (index in uncertain_index){
+    result[index] <- as.character(authority_prediction[index])
+  }
+  return(result)
+}
+```
+
+A voting parameter vs accuracy plot is made. The accuracy is calculated on validation datasets. The highest accuracy happens when voting parameter is 0.85. And highest accuracy is 0.999. 
+
+```{r echo = FALSE,warning =FALSE, message = FALSE}
+calculate_accuracy <- function(uncertainty_level){
+   result <- voting_predictor(models_list, validation, uncertainty_level)
+   a <- confusionMatrix(validation$classe, result)$overall[[1]]
+   return(a)
+}
+uncertainty_level <- seq(from = 0.05, to = 0.95, by = 0.05)
+accuracy <- lapply(uncertainty_level, calculate_accuracy)
+
+qplot(x = uncertainty_level, y = unlist(accuracy), data = NULL, main = "Accuracy of Voting Model by Voting parameter", xlab = "Voting Parameter", ylab = "Accuracy of Voting Model")
+
+uncertainty_level[which.max(unlist(accuracy))]
+max(unlist(accuracy))
+```
+
+## Some consideration
+
+###Computional complexity. 
+
+This voting predictor requires training of 13 models. The training process is computional complex. Training the 13 models 
+in my computer, an ordinary i5 computer with 16G memeory, needs about 9 hours. However, I find cpu loads is alway below 
+30%. I open 4 RStudios for training. And The time is down to less than 3 hours and cpu loads is always 100%. This suggests 
+the models can be parallel computed. 
+
+###PCA.
+
+During the training process, I notice that the algorithm with pca is normal faster than that without PCA. And many 
+algorithms with  PCA produce similar results as algorithm without PCA. This suggests that preprocess by PCA can light the 
+computional load and yield basically the same result. 
+
+##Result
+
+A voting predictor is built by 13 different models. And 99.9% accuracy is achieved by cross-validation method.
+
+##Performance On Testing Datasets
+
+Correctness is 100% for testing dataset.
+```{r cache =TRUE}
+answers <- voting_predictor(models_list, testing, 0.85)
+answers
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+  }
+
+pml_write_files(answers)
+```
+
